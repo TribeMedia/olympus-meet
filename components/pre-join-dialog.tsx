@@ -15,9 +15,10 @@ interface PreJoinDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onJoin: (token: string) => void
+  defaultUsername?: string
 }
 
-export function PreJoinDialog({ roomName, open, onOpenChange, onJoin }: PreJoinDialogProps) {
+export function PreJoinDialog({ roomName, open, onOpenChange, onJoin, defaultUsername }: PreJoinDialogProps) {
   const { formData, setFormData, resetForm } = usePreJoinStore()
   const { isAuthenticated, session } = useAuthStore()
 
@@ -25,8 +26,10 @@ export function PreJoinDialog({ roomName, open, onOpenChange, onJoin }: PreJoinD
   useEffect(() => {
     if (isAuthenticated && session?.handle) {
       setFormData({ displayName: session.handle })
+    } else if (defaultUsername) {
+      setFormData({ displayName: defaultUsername })
     }
-  }, [isAuthenticated, session?.handle, setFormData])
+  }, [isAuthenticated, session?.handle, defaultUsername, setFormData])
 
   const handleJoin = async () => {
     try {

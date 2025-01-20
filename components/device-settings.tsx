@@ -9,14 +9,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-interface DeviceOption {
-  label: string
-  deviceId: string
-}
-
 export function DeviceSettings() {
-  const { localParticipant } = useLocalParticipant()
-  const { videoInputDevices, audioInputDevices, audioOutputDevices } = useMediaDevices()
+  const { localParticipant } = useLocalParticipant({
+    room: undefined
+  })
+  const devices = useMediaDevices({
+    kind: 'videoinput',
+  })
+
+  const videoInputDevices = devices.filter(d => d.kind === 'videoinput')
+  const audioInputDevices = devices.filter(d => d.kind === 'audioinput')
+  const audioOutputDevices = devices.filter(d => d.kind === 'audiooutput')
 
   const [selectedCamera, setSelectedCamera] = useState<string>("")
   const [selectedMicrophone, setSelectedMicrophone] = useState<string>("")
@@ -25,11 +28,11 @@ export function DeviceSettings() {
 
   useEffect(() => {
     if (localParticipant) {
-      const cameraTrack = localParticipant.getTrack(Track.Source.Camera)
-      const microphoneTrack = localParticipant.getTrack(Track.Source.Microphone)
+      const cameraTrack = localParticipant.getTrackPublication(Track.Source.Camera)
+      const microphoneTrack = localParticipant.getTrackPublication(Track.Source.Microphone)
 
-      if (cameraTrack) setSelectedCamera(cameraTrack.mediaStreamTrack.getSettings().deviceId || "")
-      if (microphoneTrack) setSelectedMicrophone(microphoneTrack.mediaStreamTrack.getSettings().deviceId || "")
+      if (cameraTrack?.track) setSelectedCamera(cameraTrack.track.mediaStreamTrack.getSettings().deviceId || "")
+      if (microphoneTrack?.track) setSelectedMicrophone(microphoneTrack.track.mediaStreamTrack.getSettings().deviceId || "")
     }
   }, [localParticipant])
 
@@ -49,9 +52,9 @@ export function DeviceSettings() {
     }
   }
 
-  const handleSpeakerChange = (deviceId: string) => {
-    if (localParticipant) {
-      localParticipant.setAudioOutput(deviceId)
+  const handleSpeakerChange = async (deviceId: string) => {
+    if ('setSinkId' in HTMLAudioElement.prototype) {
+      await (document.querySelector('audio') as HTMLAudioElement)?.setSinkId?.(deviceId)
       setSelectedSpeaker(deviceId)
     }
   }
@@ -59,8 +62,10 @@ export function DeviceSettings() {
   const testAudio = () => {
     setIsTestingAudio(true)
     const audio = new Audio("/test-audio.mp3")
-    audio.setSinkId(selectedSpeaker)
-    audio.play()
+    if ('setSinkId' in audio) {
+      void audio.setSinkId(selectedSpeaker)
+    }
+    void audio.play()
     audio.onended = () => setIsTestingAudio(false)
   }
 
@@ -101,10 +106,9 @@ export function DeviceSettings() {
                   <video
                     ref={(el) => {
                       if (el) {
-                        el.srcObject = new MediaStream([
-                          localParticipant?.getTrack(Track.Source.Camera)?.mediaStreamTrack as MediaStreamTrack,
-                        ])
-                        el.play()
+                        const pub = localParticipant?.getTrackPublication(Track.Source.Camera)
+                        el.srcObject = pub?.track ? new MediaStream([pub.track.mediaStreamTrack]) : null
+                        void el.play()
                       }
                     }}
                     className="h-full w-full object-cover"

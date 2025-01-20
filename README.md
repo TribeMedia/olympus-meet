@@ -1,6 +1,6 @@
 # Olympus Meet
 
-A modern video conferencing application built with Next.js 13, LiveKit, and AT Protocol integration. This project implements a feature-based architecture with strict TypeScript typing and comprehensive testing.
+A modern video conferencing application built with Next.js 14, LiveKit, and AT Protocol integration. This project implements a feature-based architecture with strict TypeScript typing and comprehensive testing.
 
 ## Features
 

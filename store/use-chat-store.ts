@@ -3,65 +3,94 @@ import { type Room, DataPacket_Kind } from "livekit-client"
 
 export interface ChatMessage {
   id: string
-  sender: string
-  text: string
+  message: string
+  from: {
+    identity: string
+    name?: string
+  }
   timestamp: number
-  isLocal: boolean
-  isPrivate: boolean
-  recipient?: string
+  isSelf: boolean
+  roomName: string
+  status: 'sending' | 'sent' | 'error'
 }
 
 interface ChatStore {
+  isOpen: boolean
   messages: Record<string, ChatMessage[]>
   room: Room | null
-  addMessage: (roomName: string, message: ChatMessage) => void
+  toggleChat: () => void
+  closeChat: () => void
+  addMessage: (message: ChatMessage) => void
   setRoom: (room: Room) => void
-  sendMessage: (roomName: string, text: string, recipient?: string) => void
+  sendMessage: (text: string) => Promise<void>
+  getMessagesForRoom: (roomName: string) => ChatMessage[]
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
+  isOpen: false,
   messages: {},
   room: null,
-  addMessage: (roomName, message) =>
+  toggleChat: () => set((state) => ({ isOpen: !state.isOpen })),
+  closeChat: () => set({ isOpen: false }),
+  addMessage: (message) =>
     set((state) => ({
       messages: {
         ...state.messages,
-        [roomName]: [...(state.messages[roomName] || []), message],
+        [message.roomName]: [...(state.messages[message.roomName] || []), message],
       },
     })),
   setRoom: (room) => set({ room }),
-  sendMessage: (roomName, text, recipient) => {
+  getMessagesForRoom: (roomName) => {
+    return get().messages[roomName] || []
+  },
+  sendMessage: async (text) => {
     const { room } = get()
-    if (!room) return
+    if (!room) throw new Error("Room not found")
 
+    const messageId = `${Date.now()}-${Math.random()}`
     const message: ChatMessage = {
-      id: `${Date.now()}-${Math.random()}`,
-      sender: room.localParticipant.identity,
-      text,
-      timestamp: Date.now(),
-      isLocal: true,
-      isPrivate: !!recipient,
-      recipient,
-    }
-
-    const data = {
-      type: "chat",
+      id: messageId,
       message: text,
-      recipient,
+      from: {
+        identity: room.localParticipant.identity,
+        name: room.localParticipant.name
+      },
+      timestamp: Date.now(),
+      isSelf: true,
+      roomName: room.name,
+      status: 'sending'
     }
 
-    const payload = new TextEncoder().encode(JSON.stringify(data))
+    // Add message immediately with 'sending' status
+    get().addMessage(message)
 
-    if (recipient) {
-      const participantSid = room.participants.get(recipient)?.sid
-      if (participantSid) {
-        room.localParticipant.publishData(payload, DataPacket_Kind.RELIABLE, [participantSid])
-      }
-    } else {
-      room.localParticipant.publishData(payload, DataPacket_Kind.RELIABLE)
+    try {
+      const payload = new TextEncoder().encode(text)
+      await room.localParticipant.publishData(payload, {
+        reliable: true,
+        topic: 'chat'
+      })
+      
+      // Update message status to 'sent'
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [room.name]: state.messages[room.name].map((msg) =>
+            msg.id === messageId ? { ...msg, status: 'sent' as const } : msg
+          ),
+        },
+      }))
+    } catch (error) {
+      // Update message status to 'error'
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [room.name]: state.messages[room.name].map((msg) =>
+            msg.id === messageId ? { ...msg, status: 'error' as const } : msg
+          ),
+        },
+      }))
+      throw error
     }
-
-    get().addMessage(roomName, message)
   },
 }))
-

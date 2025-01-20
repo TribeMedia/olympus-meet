@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Sidebar, SidebarContent, SidebarHeader, SidebarFooter } from "@/components/ui/sidebar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
-import { X, Users } from "lucide-react"
-import type { Room, RemoteParticipant } from "livekit-client"
+import { X, Users, Send } from "lucide-react"
+import type { Room, RemoteParticipant, DataPacket_Kind } from "livekit-client"
 import { useParticipants, useLocalParticipant } from "@livekit/components-react"
 import { cn } from "@/lib/utils"
 import { useChatStore, type ChatMessage } from "@/store/use-chat-store"
@@ -32,21 +32,25 @@ export function ChatSidebar({ room, open, onOpenChange }: ChatSidebarProps) {
   useEffect(() => {
     setRoom(room)
 
-    const handleData = (payload: Uint8Array, participant = room.localParticipant) => {
+    const handleData = (payload: Uint8Array, participant?: RemoteParticipant, kind?: DataPacket_Kind, topic?: string) => {
       try {
-        const data = JSON.parse(new TextDecoder().decode(payload))
-        if (data.type === "chat") {
-          if (!data.recipient || data.recipient === localParticipant.identity) {
+        if (payload) {
+          const decoder = new TextDecoder()
+          const data = JSON.parse(decoder.decode(payload))
+          if (data.type === "chat") {
             const message: ChatMessage = {
               id: `${Date.now()}-${Math.random()}`,
-              sender: participant.identity,
-              text: data.message,
+              message: data.message,
+              from: {
+                identity: participant?.identity || room.localParticipant.identity,
+                name: participant?.name || room.localParticipant.name,
+              },
               timestamp: Date.now(),
-              isLocal: participant === room.localParticipant,
-              isPrivate: !!data.recipient,
-              recipient: data.recipient,
+              isSelf: !participant,
+              roomName: room.name,
+              status: 'sent'
             }
-            addMessage(room.name, message)
+            addMessage(message)
           }
         }
       } catch (error) {
@@ -71,7 +75,7 @@ export function ChatSidebar({ room, open, onOpenChange }: ChatSidebarProps) {
     e.preventDefault()
     if (!inputValue.trim()) return
 
-    sendMessage(room.name, inputValue.trim(), selectedParticipant?.identity)
+    sendMessage(inputValue.trim())
     setInputValue("")
   }
 
@@ -89,121 +93,157 @@ export function ChatSidebar({ room, open, onOpenChange }: ChatSidebarProps) {
   }
 
   return (
-    <Sidebar variant="floating" side="right" open={open}>
-      <SidebarHeader className="border-b p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">Chat</h2>
-            {selectedParticipant && (
-              <Badge variant="secondary" className="ml-2">
-                Private: {selectedParticipant.identity}
-              </Badge>
-            )}
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+      <SheetContent 
+        side="right" 
+        className="w-[400px] p-0 flex flex-col [&_button[aria-label='Close']]:hidden"
+      >
+        <SheetHeader className="px-6 py-4 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <SheetTitle className="text-lg font-semibold">Chat</SheetTitle>
+              {selectedParticipant && (
+                <Badge variant="secondary" className="ml-2">
+                  Private: {selectedParticipant.identity}
+                </Badge>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onOpenChange(false)}
+              aria-label="Close chat"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </SidebarHeader>
-      <div className="flex h-[calc(100vh-8rem)]">
-        {/* Participants List */}
-        <div className="w-16 border-r bg-muted/50 p-2 flex flex-col items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn("rounded-full", !selectedParticipant && "bg-primary text-primary-foreground")}
-                onClick={() => setSelectedParticipant(null)}
-              >
-                <Users className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Everyone</TooltipContent>
-          </Tooltip>
-          <Separator className="my-2" />
-          {participants.map((participant) => (
-            <Tooltip key={participant.identity}>
+        </SheetHeader>
+
+        <div className="flex flex-1 h-[calc(100vh-8rem)]">
+          <div className="w-16 border-r bg-muted/50 p-2 flex flex-col items-center gap-2">
+            <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    "rounded-full relative",
-                    selectedParticipant?.identity === participant.identity && "bg-primary text-primary-foreground",
+                    "rounded-full",
+                    !selectedParticipant && "bg-primary text-primary-foreground"
                   )}
-                  onClick={() => setSelectedParticipant(participant)}
-                  style={{
-                    backgroundColor: getParticipantColor(participant.identity),
-                  }}
+                  onClick={() => setSelectedParticipant(null)}
+                  aria-label="Message everyone"
                 >
-                  {getParticipantInitials(participant.identity)}
-                  {participant.isSpeaking && (
-                    <span className="absolute -right-1 -top-1 h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-sky-500" />
-                    </span>
-                  )}
+                  <Users className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="left">
-                {participant.identity}
-                {participant.isSpeaking && " (Speaking)"}
-              </TooltipContent>
+              <TooltipContent side="left">Everyone</TooltipContent>
             </Tooltip>
-          ))}
-        </div>
-
-        {/* Chat Messages */}
-        <div className="flex-1 flex flex-col">
-          <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-            <div className="space-y-4">
-              {messages[room.name]?.map((message) => (
-                <div key={message.id} className={`flex gap-3 ${message.isLocal ? "flex-row-reverse" : "flex-row"}`}>
-                  <Avatar
-                    className="h-8 w-8"
-                    style={{
-                      backgroundColor: getParticipantColor(message.sender),
-                    }}
-                  >
-                    <AvatarFallback>{getParticipantInitials(message.sender)}</AvatarFallback>
-                  </Avatar>
-                  <div
+            
+            <Separator className="my-2" />
+            
+            {participants.map((participant) => (
+              <Tooltip key={participant.identity}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className={cn(
-                      "rounded-lg px-3 py-2 max-w-[75%]",
-                      message.isLocal ? "bg-primary text-primary-foreground" : "bg-muted",
-                      message.isPrivate && "border-2 border-primary/50",
+                      "rounded-full relative",
+                      selectedParticipant?.identity === participant.identity && 
+                      "bg-primary text-primary-foreground"
+                    )}
+                    onClick={() => {
+                      if ('signalClient' in participant) {  
+                        setSelectedParticipant(participant as RemoteParticipant)
+                      }
+                    }}
+                    style={{
+                      backgroundColor: getParticipantColor(participant.identity),
+                    }}
+                    aria-label={`Message ${participant.identity}`}
+                  >
+                    {getParticipantInitials(participant.identity)}
+                    {participant.isSpeaking && (
+                      <span className="absolute -right-1 -top-1 h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-sky-500" />
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  {participant.identity}
+                  {participant.isSpeaking && " (Speaking)"}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+
+          <div className="flex-1 flex flex-col">
+            <ScrollArea 
+              className="flex-1 px-6 py-4" 
+              ref={scrollAreaRef}
+            >
+              <div className="space-y-4">
+                {messages[room.name]?.map((message) => (
+                  <div 
+                    key={message.id} 
+                    className={cn(
+                      "flex gap-3",
+                      message.isSelf ? "flex-row-reverse" : "flex-row"
                     )}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-medium">{message.sender}</p>
-                      {message.isPrivate && (
-                        <Badge variant="outline" className="text-xs">
-                          Private
-                        </Badge>
+                    <Avatar
+                      className="h-8 w-8"
+                      style={{
+                        backgroundColor: getParticipantColor(message.from.identity),
+                      }}
+                    >
+                      <AvatarFallback>
+                        {getParticipantInitials(message.from.identity)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div
+                      className={cn(
+                        "rounded-lg px-3 py-2 max-w-[75%]",
+                        message.isSelf 
+                          ? "bg-primary text-primary-foreground" 
+                          : "bg-muted"
                       )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-medium">
+                          {message.from.name}
+                        </p>
+                      </div>
+                      <p className="text-sm">{message.message}</p>
                     </div>
-                    <p className="text-sm">{message.text}</p>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+                ))}
+              </div>
+            </ScrollArea>
 
-          <SidebarFooter className="border-t p-4">
-            <form onSubmit={handleSendMessage} className="flex gap-2">
-              <Input
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder={selectedParticipant ? `Message ${selectedParticipant.identity}...` : "Message everyone..."}
-                className="flex-1"
-              />
-              <Button type="submit">Send</Button>
-            </form>
-          </SidebarFooter>
+            <SheetFooter className="p-4 border-t">
+              <form onSubmit={handleSendMessage} className="flex w-full gap-2">
+                <Input
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder={
+                    selectedParticipant 
+                      ? `Message ${selectedParticipant.identity}...` 
+                      : "Message everyone..."
+                  }
+                  className="flex-1"
+                />
+                <Button type="submit" size="icon">
+                  <Send className="h-4 w-4" />
+                  <span className="sr-only">Send message</span>
+                </Button>
+              </form>
+            </SheetFooter>
+          </div>
         </div>
-      </div>
-    </Sidebar>
+      </SheetContent>
+    </Sheet>
   )
 }
-
