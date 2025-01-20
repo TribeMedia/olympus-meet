@@ -1,33 +1,38 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
-import { BskyAgent } from "@atproto/api"
+import { AtpAgent, AtpSessionData } from "@atproto/api"
 
 interface AuthState {
-  agent: BskyAgent | null
-  session: { did: string; handle: string; email?: string } | null
+  session: AtpSessionData | null
   isAuthenticated: boolean
   login: (identifier: string, password: string, service?: string) => Promise<void>
   logout: () => void
+  getAgent: () => AtpAgent | null
 }
+
+const createAgent = (service: string = "https://bsky.social") => {
+  return new AtpAgent({ service })
+}
+
+let agent: AtpAgent | null = null
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      agent: null,
       session: null,
       isAuthenticated: false,
+      getAgent: () => agent,
       login: async (identifier: string, password: string, service = "https://bsky.social") => {
-        const agent = new BskyAgent({ service })
+        agent = createAgent(service)
         try {
           const { success, data } = await agent.login({ identifier, password })
-          if (success) {
+          if (success && data) {
+            const sessionData: AtpSessionData = {
+              ...data,
+              active: true,
+            }
             set({
-              agent,
-              session: {
-                did: data.did,
-                handle: data.handle,
-                email: data.email,
-              },
+              session: sessionData,
               isAuthenticated: true,
             })
           }
@@ -37,8 +42,11 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       logout: () => {
+        if (agent) {
+          agent.logout().catch(console.error)
+        }
+        agent = null
         set({
-          agent: null,
           session: null,
           isAuthenticated: false,
         })
@@ -46,19 +54,10 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage",
-      storage: {
-        getItem: (name: string) => {
-          const str = localStorage.getItem(name)
-          return str ? JSON.parse(str) : null
-        },
-        setItem: (name: string, value: unknown) => {
-          localStorage.setItem(name, JSON.stringify(value))
-        },
-        removeItem: (name: string) => {
-          localStorage.removeItem(name)
-        }
-      }
-    },
-  ),
+      partialize: (state) => ({
+        session: state.session,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
+  )
 )
-

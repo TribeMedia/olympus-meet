@@ -3,7 +3,7 @@
   "project": {
     "name": "olympus-meet",
     "root": ".",
-    "framework": "next@13",
+    "framework": "next@14",
     "typescript": true
   },
   "architecture": {
@@ -21,7 +21,7 @@
     ]
   },
   "stack": {
-    "next": "13",
+    "next": "14",
     "react": "18",
     "typescript": true,
     "state": "zustand",

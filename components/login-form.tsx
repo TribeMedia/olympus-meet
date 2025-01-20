@@ -1,14 +1,18 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/use-auth-store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/components/ui/use-toast"
 import type { LoginFormData, AuthError } from "@/types/auth-types"
 
 export function LoginForm() {
+  const router = useRouter()
+  const { toast } = useToast()
   const login = useAuthStore((state) => state.login)
   const [formData, setFormData] = useState<LoginFormData>({
     identifier: "",
@@ -25,10 +29,20 @@ export function LoginForm() {
 
     try {
       await login(formData.identifier, formData.password, formData.service)
-      document.getElementById("loginForm")?.classList.add("hidden")
+      toast({
+        title: "Success",
+        description: "Successfully logged in",
+      })
+      router.push("/")
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to login"
       setError({
-        message: err instanceof Error ? err.message : "Failed to login",
+        message: errorMessage,
+      })
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage,
       })
     } finally {
       setIsLoading(false)
@@ -99,4 +113,3 @@ export function LoginForm() {
     </Card>
   )
 }
-

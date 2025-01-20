@@ -6,13 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Settings, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { LoginForm } from "@/components/login-form"
 import { useAuthStore } from "@/store/use-auth-store"
 import { CustomSetupSheet, type CustomSetupSettings } from "@/components/custom-setup-sheet"
 import { toast } from "sonner"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import ErrorBoundary from "@/components/error-boundary"
-import { generateRoomName } from "@/lib/room-utils"
+import { generateRandomName } from "@/lib/name-generator"
 import { useRouter } from "next/navigation"
 import { PreJoinDialog } from "@/components/pre-join-dialog"
 
@@ -20,7 +19,7 @@ export const dynamic = "force-dynamic"
 export const runtime = "edge"
 
 export default function Home() {
-  const [roomName, setRoomName] = useState(() => generateRoomName())
+  const [roomName, setRoomName] = useState("")
   const router = useRouter()
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const session = useAuthStore((state) => state.session)
@@ -32,6 +31,10 @@ export default function Home() {
     livekitServerUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL || "wss://livekit.prometheus-platform.io",
     enableE2EE: false,
   })
+
+  useEffect(() => {
+    setRoomName(generateRandomName())
+  }, [])
 
   const handleCustomSetup = async (settings: CustomSetupSettings) => {
     setCustomSettings(settings)
@@ -45,7 +48,11 @@ export default function Home() {
   }
 
   const handleStartMeeting = () => {
-    setIsPreJoinOpen(true)
+    if (!isAuthenticated) {
+      router.push('/login')
+      return
+    }
+    setIsCustomSetupOpen(true)
   }
 
   const handleJoinRoom = async (token: string) => {
@@ -54,7 +61,7 @@ export default function Home() {
 
   return (
     <ErrorBoundary fallback={<div>Something went wrong. Please try refreshing the page.</div>}>
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="flex flex-col min-h-screen bg-background text-foreground">
         {/* Header */}
         <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4">
           <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -74,7 +81,7 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   className="text-sm hover:text-primary"
-                  onClick={() => document.getElementById("loginForm")?.classList.remove("hidden")}
+                  onClick={() => router.push('/login')}
                 >
                   Sign In with BlueSky
                 </Button>
@@ -88,31 +95,35 @@ export default function Home() {
         </header>
 
         {/* Main Content */}
-        <main className="flex min-h-screen flex-col items-center justify-center p-24">
-          <Card className="w-full max-w-md p-6 space-y-6">
-            <div className="space-y-2 text-center">
-              <h1 className="text-3xl font-bold">Welcome to Olympus Meet</h1>
-              <p className="text-sm text-muted-foreground">
-                Start or join a meeting with high-quality video and screen sharing
-              </p>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Input
-                  placeholder="Room name"
-                  value={roomName}
-                  onChange={(e) => setRoomName(e.target.value)}
-                />
+        <main className="flex min-h-screen flex-col items-center justify-center p-24 relative">
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: 'url("/cover.png")' }}
+          />
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative z-10 w-full max-w-md">
+            <Card className="w-full max-w-md p-6 space-y-6 bg-background/95">
+              <div className="space-y-2 text-center">
+                <h1 className="text-3xl font-bold">Welcome to Olympus Meet</h1>
+                <p className="text-sm text-muted-foreground">
+                  Start or join a meeting with high-quality video and screen sharing
+                </p>
               </div>
-              <Button className="w-full" onClick={handleStartMeeting}>
-                Start Meeting
-              </Button>
-            </div>
-          </Card>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Room name"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                  />
+                </div>
+                <Button className="w-full" onClick={handleStartMeeting}>
+                  Start Meeting
+                </Button>
+              </div>
+            </Card>
+          </div>
         </main>
-
-        {/* Login Form */}
-        <LoginForm />
 
         {/* Custom Setup Sheet */}
         <CustomSetupSheet
