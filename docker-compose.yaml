@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  olympus-meet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_LIVEKIT_URL=wss://livekit.prometheus-platform.io
+      - LIVEKIT_API_KEY=tribe
+      - LIVEKIT_API_SECRET=rLmyeKI6+hU2sKy7kuP7hRCXUKRPI2xw
+    depends_on:
+      - pds
+
+  # Personal Data Server (PDS) for AT Protocol
+  pds:
+    image: ghcr.io/bluesky-social/pds:latest
+    ports:
+      - "2583:2583"
+    environment:
+      - PDS_HOSTNAME=localhost
+      - PDS_JWT_SECRET=your_jwt_secret_here
+      - PDS_ADMIN_PASSWORD=your_admin_password_here
+      - PDS_DATA_DIRECTORY=/data
+    volumes:
+      - pds_data:/data
+
+  # AppView: Provides a read-only cache of PDS data
+  appview:
+    image: ghcr.io/bluesky-social/appview:latest
+    ports:
+      - "3001:3001"
+    environment:
+      - APPVIEW_PDS_HOST=http://pds:2583
+    depends_on:
+      - pds
+
+  # Big Graph: Handles social graph operations
+  bgs:
+    image: ghcr.io/bluesky-social/bgs:latest
+    ports:
+      - "2584:2584"
+    environment:
+      - BGS_PDS_HOST=http://pds:2583
+    depends_on:
+      - pds
+
+  # Search Service: Provides search functionality for AT Protocol
+  search:
+    image: ghcr.io/bluesky-social/search:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - SEARCH_PDS_HOST=http://pds:2583
+    depends_on:
+      - pds
+
+volumes:
+  pds_data:
+

@@ -1,0 +1,71 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "olympus-meet",
+    "root": ".",
+    "framework": "next@13",
+    "typescript": true
+  },
+  "architecture": {
+    "type": "feature-based",
+    "enforce_boundaries": true
+  },
+  "features": {
+    "base_path": "./components",
+    "enforce_isolation": true,
+    "modules": [
+      "video-conference",
+      "chat",
+      "auth",
+      "device-settings"
+    ]
+  },
+  "stack": {
+    "next": "13",
+    "react": "18",
+    "typescript": true,
+    "state": "zustand",
+    "ui": "shadcn"
+  },
+  "editor": {
+    "format_on_save": true,
+    "organize_imports": true,
+    "suggest_types": true
+  },
+  "typescript": {
+    "strict": true,
+    "no_implicit_any": true,
+    "enforce_types": true
+  },
+  "state_management": {
+    "framework": "zustand",
+    "enforce_immutability": true,
+    "use_immer": true
+  },
+  "paths": {
+    "enforce_aliases": true,
+    "aliases": [
+      { "alias": "@", "path": "./" },
+      { "alias": "@components", "path": "./components" },
+      { "alias": "@store", "path": "./store" },
+      { "alias": "@lib", "path": "./lib" }
+    ]
+  },
+  "components": {
+    "default_type": "client",
+    "enforce_types": true,
+    "enforce_props": true,
+    "prefer_functional": true
+  },
+  "documentation": {
+    "require_component_docs": true,
+    "require_store_docs": true,
+    "docs_path": "./docs"
+  },
+  "testing": {
+    "framework": "jest",
+    "enforce_tests": true,
+    "coverage_threshold": 80
+  }
+}
+
